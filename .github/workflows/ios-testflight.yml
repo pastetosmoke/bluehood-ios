@@ -18,7 +18,28 @@ on:
       - "v*"
 
 jobs:
+  # Secretsが揃っていないうちにタグを打っても「失敗」ではなく「スキップ」にする。
+  # 赤いバツが並ぶと、本当に見るべき失敗が埋もれる。
+  guard:
+    runs-on: ubuntu-latest
+    outputs:
+      ready: ${{ steps.check.outputs.ready }}
+    steps:
+      - id: check
+        env:
+          KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          CERT: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
+        run: |
+          if [ -n "$KEY_ID" ] && [ -n "$CERT" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::TestFlight用Secretsが未設定のためスキップします"
+          fi
+
   upload:
+    needs: guard
+    if: needs.guard.outputs.ready == 'true'
     runs-on: macos-15
     steps:
       - name: Checkout

@@ -20,6 +20,9 @@ on:
     tags:
       - "v*"
 
+permissions:
+  contents: write        # タグ時にReleaseへIPAを添付するため
+
 jobs:
   build:
     runs-on: macos-15
@@ -79,3 +82,40 @@ jobs:
             Bluehood-unsigned.ipa
             Bluehood-unsigned.ipa.sha256
           retention-days: 14
+
+      # タグ時のみ Release に添付する。アーティファクトと違い認証なしで落とせる。
+      # prerelease にしているのは、実機で動作確認していないものを
+      # 「リリース済み」と受け取られると困るため。
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          prerelease: true
+          files: |
+            Bluehood-unsigned.ipa
+            Bluehood-unsigned.ipa.sha256
+          body: |
+            ## 未署名IPA — 自分で署名して使うビルドです
+
+            **このIPAはそのままではインストールできません。** 署名されていないので、
+            AltStore / SideStore であなた自身の Apple ID による署名が必要です。
+            そのぶん Apple Developer Program（$99/年）は不要で、Mac も要りません。
+
+            ### 手順
+            1. [AltStore](https://altstore.io/) の AltServer を PC に導入（Windows 可）
+            2. iPhone に AltStore をインストール
+            3. AltStore から `Bluehood-unsigned.ipa` をサイドロード
+            4. iPhone: 設定 → 一般 → VPNとデバイス管理 → 開発者を信頼
+
+            ### 制約
+            - 無料 Apple ID の署名は **7日で失効**します（AltServer が同一 WiFi なら自動更新）
+            - サイドロードできるアプリは**同時に3つまで**（AltStore 自身が1枠使用）
+            - AltServer の Windows 版は Apple 公式サイト版の iTunes / iCloud が必要
+
+            ### このビルドの状態
+            **実機での動作確認は行っていません。** コンパイルとユニットテスト（32件）は
+            CI で通過していますが、CoreBluetooth の実挙動は物理端末でしか検証できないため、
+            未確認です。動作しない可能性があります。
+
+            iOS 17 以降が必要です。AirTag は iOS の制約により検出できません
+            （iOS 標準の追跡通知をご利用ください）。
