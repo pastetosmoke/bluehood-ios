@@ -46,3 +46,28 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.faker.bluehood.sweep
         GENERATE_INFOPLIST_FILE: NO
         TARGETED_DEVICE_FAMILY: "1"
+
+  # 検知ロジックのユニットテスト。BLEハードウェアを使わない純粋な判定部分は
+  # シミュレータで検証できるので、実機もApple Developer Programも要らない。
+  BluehoodTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: BluehoodTests
+    dependencies:
+      - target: Bluehood
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.faker.bluehood.sweep.tests
+        GENERATE_INFOPLIST_FILE: YES
+
+schemes:
+  Bluehood:
+    build:
+      targets:
+        Bluehood: all
+        BluehoodTests: [test]
+    test:
+      targets:
+        - BluehoodTests
+      gatherCoverageData: true

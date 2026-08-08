@@ -42,3 +42,25 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY=""
+
+      # 検知ロジックはBLEハードウェアに触らないのでシミュレータで検証できる。
+      # 実機もApple Developer Programも不要。誤検知/見逃しの両方向を固定する。
+      - name: Run unit tests
+        run: |
+          set -euo pipefail
+          # 実在するシミュレータ名をランナーから拾う(固定名だと将来壊れる)
+          DEVICE=$(xcrun simctl list devices available --json \
+            | python3 -c "import json,sys; d=json.load(sys.stdin)['devices']; \
+                ds=[x for k,v in d.items() if 'iOS' in k for x in v]; \
+                print(sorted(ds, key=lambda x: x['name'])[-1]['udid'])")
+          echo "simulator: $DEVICE"
+          xcodebuild \
+            -project Bluehood-iOS.xcodeproj \
+            -scheme Bluehood \
+            -configuration Debug \
+            -destination "id=$DEVICE" \
+            test \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            | xcpretty --test --color || exit ${PIPESTATUS[0]}
