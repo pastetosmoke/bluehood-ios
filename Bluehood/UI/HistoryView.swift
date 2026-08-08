@@ -13,6 +13,7 @@ import SwiftUI
 struct HistoryView: View {
     @Query(sort: \Sweep.startedAt, order: .reverse) private var sweeps: [Sweep]
     @Environment(\.modelContext) private var context
+    @State private var selected: CoPresence?
 
     private var coPresences: [CoPresence] {
         CoPresenceDetector.analyze(sweeps: sweeps)
@@ -36,6 +37,9 @@ struct HistoryView: View {
                 }
             }
             .navigationTitle("履歴")
+            .sheet(item: $selected) { c in
+                EvidenceView(coPresence: c, sweeps: sweeps)
+            }
         }
     }
 
@@ -50,7 +54,12 @@ struct HistoryView: View {
                 Text("複数のスイープに共通して現れた機器はありません。")
                     .font(.caption).foregroundStyle(.secondary)
             } else {
-                ForEach(items) { c in CoPresenceRow(item: c) }
+                ForEach(items) { c in
+                    Button { selected = c } label: {
+                        CoPresenceRow(item: c)
+                    }
+                    .buttonStyle(.plain)
+                }
             }
         } header: {
             Text("複数の場所で現れた機器")
