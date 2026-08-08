@@ -73,8 +73,33 @@ open Bluehood-iOS.xcodeproj
 - iOS 17+
 - Xcode 16.4
 
-CI は push ごとに署名なしでコンパイル検証し（`ios-build-check`）、
-タグ push で Ad Hoc IPA を生成します（`ios-ad-hoc`、要 Secrets 設定）。
+### CI
+
+| ワークフロー | 契機 | Secrets | 用途 |
+|---|---|---|---|
+| `ios-build-check` | 毎 push | **不要** | 署名なしでコンパイル検証 |
+| `ios-testflight` | タグ `v*` | 必要 | TestFlight へアップロード（**推奨**） |
+| `ios-ad-hoc` | タグ `v*` | 必要 | Ad Hoc IPA を生成（UDID登録が必要な旧経路） |
+
+配布は TestFlight を推奨します。Ad Hoc は 100台/年・UDID の事前登録が要りますが、
+TestFlight は外部テスター 10,000 人まで、公開リンクで参加でき、UDID の収集が不要です。
+必要としている人に「端末の識別子を教えてください」と要求せずに済むことは、
+このアプリの性質上とくに重要です。
+
+TestFlight 用 Secrets:
+
+| 名前 | 中身 |
+|---|---|
+| `BUILD_CERTIFICATE_BASE64` | Apple **Distribution** 証明書＋秘密鍵の `.p12` |
+| `P12_PASSWORD` | 上記のパスワード |
+| `PROVISIONING_PROFILE_BASE64` | **App Store** 用 `.mobileprovision` |
+| `PROVISIONING_PROFILE_NAME` | 同プロファイル名 |
+| `EXPORT_OPTIONS_APPSTORE_BASE64` | `distribution/ExportOptions.appstore.plist.example` を自分の値に変更したもの |
+| `APPLE_TEAM_ID` | Team ID |
+| `ASC_KEY_ID` / `ASC_ISSUER_ID` / `ASC_KEY_P8_BASE64` | App Store Connect API キー |
+
+ビルド番号は `github.run_number` を使うため手動管理は不要です。
+TestFlight のビルドは **90日で期限切れ**になるので、継続配布には再アップロードが要ります。
 
 ---
 

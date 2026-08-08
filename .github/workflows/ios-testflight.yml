@@ -1,0 +1,140 @@
+# TestFlight へアップロードする。
+#
+# Ad Hoc(ios-ad-hoc.yml)との違い:
+#   - UDID登録が不要。外部テスターは最大10,000人、公開リンクで参加できる
+#   - IPAのホスティングが不要(Appleが配る)
+#   - 外部テスト配布には Beta App Review が入る(内部テスターのみなら不要)
+#   - ビルドの有効期限は90日。切れたら再アップロードが要る
+#
+# 認証は App Store Connect API キー(.p8)を使う。
+# Apple ID + アプリ用パスワードでも通るが、APIキーのほうが権限を絞れて失効も個別にできる。
+
+name: iOS TestFlight
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  upload:
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: "16.4"
+
+      - name: Import signing certificate
+        env:
+          BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
+          P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
+        run: |
+          set -euo pipefail
+          CERT_PATH="$RUNNER_TEMP/signing.p12"
+          KEYCHAIN_PATH="$RUNNER_TEMP/bluehood-signing.keychain-db"
+
+          echo "$BUILD_CERTIFICATE_BASE64" | base64 --decode > "$CERT_PATH"
+
+          security create-keychain -p "$RUNNER_TEMP" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$RUNNER_TEMP" "$KEYCHAIN_PATH"
+
+          security import "$CERT_PATH" \
+            -P "$P12_PASSWORD" \
+            -A -t cert -f pkcs12 \
+            -k "$KEYCHAIN_PATH"
+
+          # 無いと codesign が keychain アクセスの確認を待ち、GUIの無いCIで無言のハングになる
+          security set-key-partition-list \
+            -S apple-tool:,apple:,codesign: \
+            -s -k "$RUNNER_TEMP" "$KEYCHAIN_PATH" >/dev/null
+
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+          security default-keychain -s "$KEYCHAIN_PATH"
+
+      - name: Install provisioning profile
+        env:
+          PROVISIONING_PROFILE_BASE64: ${{ secrets.PROVISIONING_PROFILE_BASE64 }}
+        run: |
+          set -euo pipefail
+          PROFILE_PATH="$RUNNER_TEMP/bluehood.mobileprovision"
+          echo "$PROVISIONING_PROFILE_BASE64" | base64 --decode > "$PROFILE_PATH"
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          cp "$PROFILE_PATH" "$HOME/Library/MobileDevice/Provisioning Profiles/bluehood.mobileprovision"
+
+      - name: Generate Xcode project
+        run: |
+          set -euo pipefail
+          brew install xcodegen
+          xcodegen generate --spec project.yml
+
+      # TestFlight のビルド番号は同一バージョン内で単調増加でなければ拒否される。
+      # run_number を使えば手動管理が要らず、重複も起きない。
+      - name: Set build number
+        run: |
+          set -euo pipefail
+          echo "BUILD_NUMBER=${{ github.run_number }}" >> "$GITHUB_ENV"
+
+      - name: Build archive
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -project Bluehood-iOS.xcodeproj \
+            -scheme Bluehood \
+            -configuration Release \
+            -archivePath "$RUNNER_TEMP/Bluehood.xcarchive" \
+            -destination "generic/platform=iOS" \
+            archive \
+            CODE_SIGN_STYLE=Manual \
+            DEVELOPMENT_TEAM="${{ secrets.APPLE_TEAM_ID }}" \
+            PROVISIONING_PROFILE_SPECIFIER="${{ secrets.PROVISIONING_PROFILE_NAME }}" \
+            CURRENT_PROJECT_VERSION="$BUILD_NUMBER"
+
+      - name: Export IPA
+        env:
+          EXPORT_OPTIONS_PLIST_BASE64: ${{ secrets.EXPORT_OPTIONS_APPSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          echo "$EXPORT_OPTIONS_PLIST_BASE64" | base64 --decode > "$RUNNER_TEMP/ExportOptions.plist"
+
+          xcodebuild \
+            -exportArchive \
+            -archivePath "$RUNNER_TEMP/Bluehood.xcarchive" \
+            -exportPath "$RUNNER_TEMP/export" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist"
+
+          mkdir -p artifacts
+          cp "$RUNNER_TEMP/export/"*.ipa artifacts/Bluehood.ipa
+          shasum -a 256 artifacts/Bluehood.ipa
+
+      - name: Upload to TestFlight
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8_BASE64: ${{ secrets.ASC_KEY_P8_BASE64 }}
+        run: |
+          set -euo pipefail
+          # altool は .p8 を決まった場所からしか読まない。パス指定のオプションは無い。
+          mkdir -p "$HOME/.appstoreconnect/private_keys"
+          echo "$ASC_KEY_P8_BASE64" | base64 --decode \
+            > "$HOME/.appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID}.p8"
+
+          xcrun altool --upload-app \
+            --type ios \
+            --file artifacts/Bluehood.ipa \
+            --apiKey "$ASC_KEY_ID" \
+            --apiIssuer "$ASC_ISSUER_ID"
+
+      - name: Cleanup signing material
+        if: always()
+        run: |
+          security delete-keychain "$RUNNER_TEMP/bluehood-signing.keychain-db" || true
+          rm -f "$RUNNER_TEMP/signing.p12"
+          rm -f "$RUNNER_TEMP/bluehood.mobileprovision"
+          rm -f "$RUNNER_TEMP/ExportOptions.plist"
+          rm -rf "$HOME/.appstoreconnect/private_keys"

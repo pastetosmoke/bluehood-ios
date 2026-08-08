@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  TestFlight / App Store 提出用の ExportOptions。
+  Ad Hoc 用(ExportOptions.plist.example)とは method と profile が異なるので混同しないこと。
+
+  YOUR_TEAM_ID と プロファイル名を自分の値に置き換えてから base64 化し、
+  GitHub Secrets の EXPORT_OPTIONS_APPSTORE_BASE64 に登録する。
+-->
+<plist version="1.0">
+<dict>
+    <!-- Xcode 15.3 以降の名称。古い Xcode では app-store。
+         Ad Hoc は release-testing(旧 ad-hoc)なので取り違えるとアップロードが弾かれる。 -->
+    <key>method</key>
+    <string>app-store-connect</string>
+
+    <key>teamID</key>
+    <string>YOUR_TEAM_ID</string>
+
+    <key>signingStyle</key>
+    <string>manual</string>
+
+    <key>provisioningProfiles</key>
+    <dict>
+        <key>com.faker.bluehood.sweep</key>
+        <string>YOUR_APPSTORE_PROFILE_NAME</string>
+    </dict>
+
+    <!-- ビットコード は廃止済み。明示的に無効化しておく -->
+    <key>uploadSymbols</key>
+    <true/>
+
+    <!-- CIからアップロードするので、ここでは自動アップロードしない
+         (xcrun altool 側で行い、失敗を切り分けられるようにする) -->
+    <key>destination</key>
+    <string>export</string>
+</dict>
+</plist>
