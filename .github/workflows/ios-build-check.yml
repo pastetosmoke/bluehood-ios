@@ -1,0 +1,44 @@
+# 署名素材を一切使わずコンパイルだけ確認する。
+#
+# Ad Hoc ビルド(ios-ad-hoc.yml)は証明書とProvisioning Profileが揃わないと動かせないが、
+# 「そもそもコードが通るか」はそれ以前の問題であり、毎push即座に分かるべき。
+# シミュレータ向けビルドは署名不要なので Secrets がゼロでも回る。
+
+name: iOS Build Check
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: "16.4"
+
+      - name: Generate Xcode project
+        run: |
+          set -euo pipefail
+          brew install xcodegen
+          xcodegen generate --spec project.yml
+
+      - name: Build for simulator (no signing)
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -project Bluehood-iOS.xcodeproj \
+            -scheme Bluehood \
+            -configuration Debug \
+            -destination "generic/platform=iOS Simulator" \
+            build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY=""

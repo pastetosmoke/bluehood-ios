@@ -1,0 +1,16 @@
+# 生成物。project.yml が唯一の定義なので pbxproj はコミットしない。
+*.xcodeproj/
+*.xcworkspace/
+DerivedData/
+build/
+*.ipa
+
+# 署名素材。漏れると第三者が正規のBluehoodを名乗るIPAを配れる。
+*.mobileprovision
+*.p12
+*.cer
+*.p8
+secrets/
+ExportOptions.plist
+
+.DS_Store

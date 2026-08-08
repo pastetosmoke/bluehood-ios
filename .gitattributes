@@ -1,0 +1,5 @@
+# 改行はLFに正規化する。WindowsのCRLFがそのまま入ると、
+# CI(macOS)上のシェルスクリプトやYAML内のヒアドキュメントが壊れることがある。
+* text=auto eol=lf
+*.png binary
+*.ipa binary

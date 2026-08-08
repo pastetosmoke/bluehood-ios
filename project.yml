@@ -1,0 +1,48 @@
+# XcodeGen 用のプロジェクト定義。
+#
+# .xcodeproj を手書きでコミットしない理由: pbxproj は生成物であり、
+# 差分が読めず、コンフリクトの解決が事実上不可能になる。
+# CI 側で `xcodegen generate` してから xcodebuild する。
+#
+#   brew install xcodegen && xcodegen generate
+
+name: Bluehood-iOS
+options:
+  bundleIdPrefix: com.faker
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: "5.10"
+    MARKETING_VERSION: "0.1"
+    CURRENT_PROJECT_VERSION: "1"
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+
+targets:
+  Bluehood:
+    type: application
+    platform: iOS
+    sources:
+      - path: Bluehood
+    info:
+      path: Bluehood/Info.plist
+      properties:
+        CFBundleDisplayName: Bluehood Sweep
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        # CoreBluetooth の利用には必須。文言は審査でも読まれるので用途を具体的に書く。
+        NSBluetoothAlwaysUsageDescription: >-
+          周囲のBluetooth機器を調べ、追跡用タグの有無を確認するために使用します。
+        # 位置情報は証拠記録のためだけに使う。拒否されてもスイープは動く。
+        # 記録するのは自分の位置のみで、検出した機器の位置は記録しない。
+        NSLocationWhenInUseUsageDescription: >-
+          証拠として記録する場合に、スイープを実施した自分の位置のみを記録します。
+          検出した相手の位置は記録しません。
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.faker.bluehood.sweep
+        GENERATE_INFOPLIST_FILE: NO
+        TARGETED_DEVICE_FAMILY: "1"
