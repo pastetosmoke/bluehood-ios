@@ -1,0 +1,81 @@
+# 未署名IPAを生成する。AltStore / SideStore で自分のApple IDで署名して実機に入れる用。
+#
+# Apple Developer Program($99/年)が要らない経路。
+# 署名はインストールする人が自分の無料Apple IDで行うので、
+# このCIには証明書もProvisioning Profileも渡さない(Secretsゼロで動く)。
+#
+# 制約:
+#   - 無料Apple IDの署名は7日で失効。AltServerが同一WiFi上にあれば自動更新される
+#   - 無料Apple IDでサイドロードできるアプリは同時に3つまで
+#   - 初回はiPhone側で「設定 → 一般 → VPNとデバイス管理」から開発者を信頼する必要がある
+#
+# シミュレータ向けではなく**デバイス向け(arm64)**でビルドすること。
+# シミュレータ用バイナリは実機にインストールできない。
+
+name: iOS Unsigned IPA
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: "16.4"
+
+      - name: Generate Xcode project
+        run: |
+          set -euo pipefail
+          brew install xcodegen
+          xcodegen generate --spec project.yml
+
+      - name: Build unsigned (device arm64)
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -project Bluehood-iOS.xcodeproj \
+            -scheme Bluehood \
+            -configuration Release \
+            -destination "generic/platform=iOS" \
+            -derivedDataPath "$RUNNER_TEMP/dd" \
+            build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGN_ENTITLEMENTS=""
+
+      - name: Package as IPA
+        run: |
+          set -euo pipefail
+          APP="$RUNNER_TEMP/dd/Build/Products/Release-iphoneos/Bluehood.app"
+          test -d "$APP" || { echo "::error::.app が見つからない: $APP"; ls -R "$RUNNER_TEMP/dd/Build/Products" || true; exit 1; }
+
+          # アーキテクチャを確認。x86_64だけならシミュレータ用で実機に入らない。
+          echo "--- architectures ---"
+          lipo -info "$APP/Bluehood" || true
+
+          mkdir -p "$RUNNER_TEMP/pkg/Payload"
+          cp -R "$APP" "$RUNNER_TEMP/pkg/Payload/"
+          ( cd "$RUNNER_TEMP/pkg" && zip -qry "$GITHUB_WORKSPACE/Bluehood-unsigned.ipa" Payload )
+
+          shasum -a 256 "$GITHUB_WORKSPACE/Bluehood-unsigned.ipa" \
+            | tee "$GITHUB_WORKSPACE/Bluehood-unsigned.ipa.sha256"
+          ls -lh "$GITHUB_WORKSPACE/Bluehood-unsigned.ipa"
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: Bluehood-unsigned-ipa
+          path: |
+            Bluehood-unsigned.ipa
+            Bluehood-unsigned.ipa.sha256
+          retention-days: 14

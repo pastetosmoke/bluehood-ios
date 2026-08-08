@@ -77,9 +77,32 @@ open Bluehood-iOS.xcodeproj
 
 | ワークフロー | 契機 | Secrets | 用途 |
 |---|---|---|---|
-| `ios-build-check` | 毎 push | **不要** | 署名なしでコンパイル検証 |
-| `ios-testflight` | タグ `v*` | 必要 | TestFlight へアップロード（**推奨**） |
-| `ios-ad-hoc` | タグ `v*` | 必要 | Ad Hoc IPA を生成（UDID登録が必要な旧経路） |
+| `ios-build-check` | 毎 push | **不要** | コンパイル検証＋ユニットテスト |
+| `ios-unsigned-ipa` | 手動 / タグ | **不要** | 未署名IPA（AltStore用・**課金不要**） |
+| `ios-testflight` | タグ `v*` | 必要 | TestFlight へアップロード |
+| `ios-ad-hoc` | タグ `v*` | 必要 | Ad Hoc IPA（UDID登録が必要な旧経路） |
+
+### 課金せずに実機で試す（AltStore / SideStore）
+
+Apple Developer Program（$99/年）なしで実機に入れられます。**Mac は不要**で、
+AltServer は Windows でも動きます。署名は各自の無料 Apple ID で行うため、
+このリポジトリの CI には証明書を一切渡しません。
+
+1. Actions → **iOS Unsigned IPA** → Run workflow
+2. 完了後、アーティファクト `Bluehood-unsigned-ipa` をダウンロード
+3. [AltStore](https://altstore.io/) の AltServer を PC に入れ、iPhone に AltStore を導入
+4. AltStore から `Bluehood-unsigned.ipa` をサイドロード
+5. iPhone の 設定 → 一般 → VPNとデバイス管理 で開発者を信頼
+
+制約:
+
+- **7日で失効**します。AltServer が同じ WiFi にいれば自動で更新されます
+- 無料 Apple ID でサイドロードできるアプリは**同時に3つまで**（AltStore 自身が1枠を使います）
+- AltServer の Windows 版は Apple 公式サイト版の iTunes / iCloud が必要です
+  （Microsoft Store 版では動きません）
+
+このアプリは Bluetooth と位置情報しか使わず特殊な entitlement を必要としないため、
+無料 Apple ID の署名で動作するはずです。
 
 配布は TestFlight を推奨します。Ad Hoc は 100台/年・UDID の事前登録が要りますが、
 TestFlight は外部テスター 10,000 人まで、公開リンクで参加でき、UDID の収集が不要です。
