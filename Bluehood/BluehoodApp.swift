@@ -9,8 +9,19 @@ import SwiftUI
 struct BluehoodApp: App {
     var body: some Scene {
         WindowGroup {
-            SweepView()
+            RootView()
         }
         .modelContainer(for: [Sweep.self, SweepDevice.self])
+    }
+}
+
+struct RootView: View {
+    var body: some View {
+        TabView {
+            SweepView()
+                .tabItem { Label("スイープ", systemImage: "dot.radiowaves.left.and.right") }
+            HistoryView()
+                .tabItem { Label("履歴", systemImage: "clock.arrow.circlepath") }
+        }
     }
 }

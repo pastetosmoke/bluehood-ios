@@ -7,22 +7,37 @@ import SwiftUI
 
 struct SweepView: View {
     @StateObject private var scanner = SweepScanner()
+    @StateObject private var location = LocationProvider()
     @Environment(\.modelContext) private var context
     @State private var label = ""
-    @State private var saved = false
+    @State private var justSaved = false
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
                 ScopeBanner()
                 StatusBar(state: scanner.state, isSweeping: scanner.state.isSweeping) {
-                    if scanner.state.isSweeping { finish() } else { scanner.start() }
+                    if scanner.state.isSweeping { finish() } else { begin() }
+                }
+                if scanner.state.isSweeping || !label.isEmpty {
+                    LabelField(label: $label)
                 }
                 content
             }
             .navigationTitle("Bluehood Sweep")
             .navigationBarTitleDisplayMode(.inline)
+            .task { location.requestIfNeeded() }
+            .alert("保存しました", isPresented: $justSaved) {
+                Button("OK") { label = "" }
+            } message: {
+                Text("「履歴」タブで、過去のスイープと共通する機器を確認できます。")
+            }
         }
+    }
+
+    private func begin() {
+        location.start()      // スイープ中だけ測位する。常時追跡はしない
+        scanner.start()
     }
 
     @ViewBuilder
@@ -47,16 +62,37 @@ struct SweepView: View {
 
     private func finish() {
         scanner.stop()
+        location.stop()
+
         let sweep = Sweep(label: label.isEmpty ? nil : label)
         sweep.endedAt = Date()
         sweep.receivedCount = scanner.state.received
+        // 記録するのは自分の座標だけ。検出した機器の位置は取得も推定もしない。
+        if let l = location.current {
+            sweep.myLat = l.coordinate.latitude
+            sweep.myLon = l.coordinate.longitude
+            sweep.myAccuracyM = l.horizontalAccuracy
+        }
         for hit in scanner.hits {
             let d = SweepDevice(hit: hit)
             d.sweep = sweep
             sweep.devices.append(d)
         }
         context.insert(sweep)
-        saved = true
+        justSaved = true
+    }
+}
+
+private struct LabelField: View {
+    @Binding var label: String
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "tag").font(.caption).foregroundStyle(.secondary)
+            TextField("この場所の名前（例: レンタカー、ホテル301）", text: $label)
+                .font(.subheadline)
+                .textInputAutocapitalization(.never)
+        }
+        .padding(.horizontal, 16).padding(.bottom, 8)
     }
 }
 
